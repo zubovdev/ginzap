@@ -23,7 +23,7 @@ import (
 // It receives:
 //   1. A time package format string (e.g. time.RFC3339).
 //   2. A boolean stating whether to use UTC time zone or local.
-func Ginzap(logger *zap.Logger, timeFormat string, utc bool) gin.HandlerFunc {
+func Ginzap(logger *zap.Logger, timeFormat string, utc bool, ctxKeys ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		// some evil middlewares modify this values
@@ -35,6 +35,14 @@ func Ginzap(logger *zap.Logger, timeFormat string, utc bool) gin.HandlerFunc {
 		latency := end.Sub(start)
 		if utc {
 			end = end.UTC()
+		}
+
+		if len(ctxKeys) > 0 {
+			for _, k := range ctxKeys {
+				if v, ok := c.Get(k); ok {
+					logger.With(zap.Any(k, v))
+				}
+			}
 		}
 
 		if len(c.Errors) > 0 {
@@ -62,7 +70,7 @@ func Ginzap(logger *zap.Logger, timeFormat string, utc bool) gin.HandlerFunc {
 // All errors are logged using zap.Error().
 // stack means whether output the stack info.
 // The stack info is easy to find where the error occurs but the stack info is too large.
-func RecoveryWithZap(logger *zap.Logger, stack bool) gin.HandlerFunc {
+func RecoveryWithZap(logger *zap.Logger, stack bool, ctxKeys ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -73,6 +81,14 @@ func RecoveryWithZap(logger *zap.Logger, stack bool) gin.HandlerFunc {
 					if se, ok := ne.Err.(*os.SyscallError); ok {
 						if strings.Contains(strings.ToLower(se.Error()), "broken pipe") || strings.Contains(strings.ToLower(se.Error()), "connection reset by peer") {
 							brokenPipe = true
+						}
+					}
+				}
+
+				if len(ctxKeys) > 0 {
+					for _, k := range ctxKeys {
+						if v, ok := c.Get(k); ok {
+							logger.With(zap.Any(k, v))
 						}
 					}
 				}
